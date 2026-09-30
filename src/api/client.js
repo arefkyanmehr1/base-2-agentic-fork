@@ -1,6 +1,9 @@
 import * as SecureStore from 'expo-secure-store';
 import { API_BASE_URL, API_TIMEOUT_MS, DEMO_MODE } from '../config';
 
+const { apiErrorMessage } = require('./apiError');
+const { bearerHeaders } = require('./requestAuth');
+
 const ACCESS_TOKEN_KEY = 'auth.accessToken';
 const SERVICE_PASSWORD_KEY = 'service.password';
 const SECURITY_KEY_KEY = 'service.securityKey';
@@ -28,19 +31,19 @@ async function getServiceHeaders() {
   };
 }
 
-export async function apiRequest(path, { method = 'POST', body, params, token } = {}) {
+export async function apiRequest(path, { method = 'POST', body, params, token, authenticated = true } = {}) {
   if (DEMO_MODE) {
     throw new Error('حالت نمایشی فعال است؛ هیچ درخواستی به سرویس ارسال نشد.');
   }
   if (!API_BASE_URL) throw new Error('نشانی API تنظیم نشده است.');
 
-  const accessToken = token || await getAccessToken();
+  const accessToken = authenticated ? token || await getAccessToken() : null;
   const serviceHeaders = await getServiceHeaders();
   const headers = {
     Accept: 'application/json',
     'Content-Type': 'application/json',
     ...serviceHeaders,
-    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    ...bearerHeaders(authenticated, accessToken),
   };
   const url = new URL(`${API_BASE_URL}${path}`);
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -57,9 +60,9 @@ export async function apiRequest(path, { method = 'POST', body, params, token } 
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
     const payload = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(payload?.resultMessage || `خطای ارتباط با سرویس (${response.status})`);
+    if (!response.ok) throw new Error(apiErrorMessage(response.status, payload?.resultMessage));
     if (payload?.resultCode !== undefined && Number(payload.resultCode) !== 200) {
-      throw new Error(payload.resultMessage || 'سرویس درخواست را نپذیرفت.');
+      throw new Error(apiErrorMessage(payload.resultCode, payload.resultMessage));
     }
     return payload;
   } catch (error) {

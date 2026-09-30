@@ -4,6 +4,7 @@ export async function login({ nationalCode, password, capToken = '' }) {
   if (!nationalCode?.trim() || !password) throw new Error('کد ملی و رمز عبور را وارد کنید.');
   const response = await apiRequest('/Account/UserLoginV2', {
     body: { nationalCode: nationalCode.trim(), password, capToken },
+    authenticated: false,
   });
   const user = response?.obj;
   const token = typeof user === 'string' ? user : user?.token || user?.accessToken;
